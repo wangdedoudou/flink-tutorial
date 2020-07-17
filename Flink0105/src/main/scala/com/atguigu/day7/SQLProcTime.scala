@@ -5,14 +5,12 @@ import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironm
 import org.apache.flink.table.api._
 import org.apache.flink.table.api.scala._
 import org.apache.flink.api.scala._
-import org.apache.flink.streaming.api.TimeCharacteristic
 import org.apache.flink.types.Row
 
-object TableEventTime {
+object SQLProcTime {
   def main(args: Array[String]): Unit = {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     env.setParallelism(1)
-    env.setStreamTimeCharacteristic(TimeCharacteristic.EventTime)
 
     val settings = EnvironmentSettings
       .newInstance()
@@ -22,17 +20,12 @@ object TableEventTime {
 
     val tEnv = StreamTableEnvironment.create(env, settings)
 
-    val stream: DataStream[SensorReading] = env
-      .addSource(new SensorSource)
-      .assignAscendingTimestamps(_.timestamp)
+    val stream: DataStream[SensorReading] = env.addSource(new SensorSource)
 
-    // `.rowtime`指定已有字段为事件时间
-    val table: Table = tEnv.fromDataStream(stream, 'id, 'timestamp.rowtime as 'ts, 'temperature as 'temp)
+    tEnv.createTemporaryView("sensor", stream, 'id, 'timestamp as 'ts, 'pt.proctime)
 
-    table
-        .window(Slide over 10.seconds every 5.seconds on 'ts as 'w)
-        .groupBy('id, 'w)
-        .select('id, 'id.count)
+    tEnv
+        .sqlQuery("SELECT id, count(id) FROM sensor GROUP BY id, TUMBLE(pt, INTERVAL '10' SECOND)")
         .toAppendStream[Row]
         .print()
 

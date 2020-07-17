@@ -8,7 +8,7 @@ import org.apache.flink.api.scala._
 import org.apache.flink.streaming.api.TimeCharacteristic
 import org.apache.flink.types.Row
 
-object TableEventTime {
+object SQLEventTime {
   def main(args: Array[String]): Unit = {
     val env = StreamExecutionEnvironment.getExecutionEnvironment
     env.setParallelism(1)
@@ -24,15 +24,12 @@ object TableEventTime {
 
     val stream: DataStream[SensorReading] = env
       .addSource(new SensorSource)
-      .assignAscendingTimestamps(_.timestamp)
+      .assignAscendingTimestamps(_.timestamp) // 必须分配时间戳和设置水位线
 
-    // `.rowtime`指定已有字段为事件时间
-    val table: Table = tEnv.fromDataStream(stream, 'id, 'timestamp.rowtime as 'ts, 'temperature as 'temp)
+    tEnv.createTemporaryView("sensor", stream, 'id, 'timestamp.rowtime as 'ts, 'temperature)
 
-    table
-        .window(Slide over 10.seconds every 5.seconds on 'ts as 'w)
-        .groupBy('id, 'w)
-        .select('id, 'id.count)
+    tEnv
+        .sqlQuery("SELECT id, COUNT(id) FROM sensor GROUP BY id, HOP(ts, INTERVAL '5' SECOND, INTERVAL '10' SECOND)")
         .toAppendStream[Row]
         .print()
 
