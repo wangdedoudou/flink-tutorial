@@ -27,9 +27,9 @@ object OrderTimeoutDetect {
 
     // 定义的规则
     val pattern = Pattern
-      .begin[OrderEvent]("create")
+      .begin[OrderEvent]("first")
       .where(_.eventType.equals("create"))
-      .next("pay")
+      .next("second")
       .where(_.eventType.equals("pay"))
       .within(Time.seconds(5))
 
@@ -40,15 +40,19 @@ object OrderTimeoutDetect {
     val orderTimeoutOutputTag = new OutputTag[String]("timeout")
 
     // 这个匿名函数用来处理超时的检测
-    val timeoutFunc = (map: scala.collection.Map[String, Iterable[OrderEvent]], ts: Long, out: Collector[String]) => {
-      val orderCreate = map("create").iterator.next()
+    val timeoutFunc = (pattern: scala.collection.Map[String, Iterable[OrderEvent]], ts: Long, out: Collector[String]) => {
+      val orderCreate = pattern("first").iterator.next()
+      out.collect("----------------")
       out.collect("在 " + ts + " ms之前没有支付！超时了！超时订单的ID为 " + orderCreate.orderId)
+      out.collect("----------------")
     }
 
     // 这个匿名函数用来处理支付成功的检测
-    val selectFunc = (map: scala.collection.Map[String, Iterable[OrderEvent]], out: Collector[String]) => {
-      val orderPay = map("pay").iterator.next()
+    val selectFunc = (pattern: scala.collection.Map[String, Iterable[OrderEvent]], out: Collector[String]) => {
+      val orderPay = pattern("second").iterator.next()
+      out.collect("================")
       out.collect("订单ID为 " + orderPay.orderId + " 支付成功！")
+      out.collect("================")
     }
 
     val detectStream = patternStream

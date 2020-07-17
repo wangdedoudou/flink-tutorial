@@ -5,7 +5,6 @@ import org.apache.flink.cep.scala.pattern.Pattern
 import org.apache.flink.streaming.api.TimeCharacteristic
 import org.apache.flink.streaming.api.scala._
 import org.apache.flink.streaming.api.windowing.time.Time
-import org.apache.flink.util.Collector
 
 object OrderTimeoutDetectUsingSelect {
 
@@ -27,9 +26,9 @@ object OrderTimeoutDetectUsingSelect {
 
     // 定义的规则
     val pattern = Pattern
-      .begin[OrderEvent]("create")
+      .begin[OrderEvent]("first")
       .where(_.eventType.equals("create"))
-      .next("pay")
+      .next("second")
       .where(_.eventType.equals("pay"))
       .within(Time.seconds(5))
 
@@ -40,14 +39,15 @@ object OrderTimeoutDetectUsingSelect {
     val orderTimeoutOutputTag = new OutputTag[String]("timeout")
 
     // 这个匿名函数用来处理超时的检测
-    val timeoutFunc = (map: scala.collection.Map[String, Iterable[OrderEvent]], ts: Long) => {
-      val orderCreate = map("create").iterator.next()
+    val timeoutFunc = (pattern: scala.collection.Map[String, Iterable[OrderEvent]], ts: Long) => {
+      val orderCreate = pattern("first").iterator.next()
       "在 " + ts + " ms之前没有支付！超时了！超时订单的ID为 " + orderCreate.orderId
     }
 
     // 这个匿名函数用来处理支付成功的检测
-    val selectFunc = (map: scala.collection.Map[String, Iterable[OrderEvent]]) => {
-      val orderPay = map("pay").iterator.next()
+    val selectFunc = (pattern: scala.collection.Map[String, Iterable[OrderEvent]]) => {
+      val orderCreate = pattern("first").iterator.next()
+      val orderPay = pattern("second").iterator.next()
       "订单ID为 " + orderPay.orderId + " 支付成功！"
     }
 
@@ -61,6 +61,4 @@ object OrderTimeoutDetectUsingSelect {
 
     env.execute()
   }
-
-
 }
