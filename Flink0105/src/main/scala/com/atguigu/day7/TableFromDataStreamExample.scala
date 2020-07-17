@@ -40,7 +40,7 @@ object TableFromDataStreamExample {
         .toRetractStream[Row] // 第一个字段true，表示追加，false表示撤回
         .print()
 
-    // DataStream => Table => CRUD => Table => DataStream => Sink
+    // DataStream => Table(动态表) => CRUD => Table(动态表) => DataStream => Sink
 
     env.execute()
   }
